@@ -1,0 +1,675 @@
+---
+title: "Somalia population disagregation data analysis and visualization"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse) # meta package of all tidyverse packages
+
+```
+
+
+```{r}
+# Read Excel file
+df <- read_csv("somalia_population_disagregation.csv")
+
+# View the data
+df
+
+```
+
+```{r}
+# Get dimensions of data frame
+dim(df)
+
+```
+
+
+
+
+```{r}
+# view default column names before we change
+colnames(df)
+
+```
+
+
+```{r}
+# calculate the sum of missing values in the dataframe
+sum(is.na(df))
+```
+```{r}
+# view rows with missing values
+na_rows <- df[!complete.cases(df), ]
+
+#view results
+na_rows
+
+```
+
+```{r}
+# view duplicated values in df
+sum(duplicated(df))
+
+```
+
+as you see here there is no duplicate rows in our dataset. but, there is duplicate columns with different column names in our dataset. to see this we can use manual method to detect column duplicates.
+
+before we detect and remove lets rename our columns for better reference.
+
+
+```{r}
+# change column names
+colnames(df) <- c("Region", "District", "Total_population", "IDPs", "Non_displaced", 
+                   "IDPs_children", "IDPs_men", "IDPs_women", "IDPs_elderly", "Subtotal_IDPs",
+                   "Non_disp_children", "Non_disp_men", "Non_disp_women", "Non_disp_elderly", 
+                   "Subtotal_non_displaced", "Total_children", "Total_men", "Total_women", 
+                   "Total_elderly", "Total")
+
+
+```
+
+
+```{r}
+# view 6 duplicated columns
+df[, c("Total_population", "Total", "IDPs", "Subtotal_IDPs", "Non_displaced", "Subtotal_non_displaced")]
+
+```
+
+```{r}
+# drop duplicated columns i.e Total, Subtotal_IDPs, subtotal_non_displaced.
+df <- subset(df, select = -c(Total, Subtotal_IDPs, Subtotal_non_displaced))
+df
+
+```
+
+
+
+
+```{r}
+# Checking data types for df2
+str(df)
+
+```
+
+
+
+
+
+```{r}
+# view dataframe
+df
+
+```
+we also need make sure is there an outliers that can effect in our analysis.
+
+```{r}
+# Create boxplots for each variable
+boxplot(df$Total_population, df$IDPs, df$Non_displaced, df$IDPs_children, df$IDPs_men, df$IDPs_women, df$IDPs_elderly, df$Subtotal_IDPs, df$Non_disp_children, df$Non_disp_men, df$Non_disp_women, df$Non_disp_elderly, df$Subtotal_non_displaced, df$Total_children, df$Total_men, df$Total_women, df$Total_elderly, df$Total)
+
+# Identify potential outliers in each variable
+outliers <- boxplot(df$Total_population, df$IDPs, df$Non_displaced, df$IDPs_children, df$IDPs_men, df$IDPs_women, df$IDPs_elderly, df$Subtotal_IDPs, df$Non_disp_children, df$Non_disp_men, df$Non_disp_women, df$Non_disp_elderly, df$Subtotal_non_displaced, df$Total_children, df$Total_men, df$Total_women, df$Total_elderly, df$Total, plot=FALSE)$out
+
+# Print out the potential outliers
+print(outliers)
+
+```
+
+```{r}
+# check summery stastistics on total population
+summary(df$Total_population)
+```
+```{r}
+# check max population by region
+max_population <- max(df$Total_population)
+row_with_max_population <- df[df$Total_population == max_population,]
+row_with_max_population
+
+```
+
+```{r}
+# view row with min population
+min_population <- min(df$Total_population)
+row_with_min_population <- df[df$Total_population == min_population,]
+row_with_min_population
+
+```
+
+
+is this boxplot, we can see there is outliers in our dataset that can effect our later analysis.
+in region columns there is an outlier banaadir who has much more population according to other regions.
+to solve this we can make a new state column, so states are around same population with banaadir state.
+
+
+```{r}
+# Create mapping between regions and states
+mapping <- list(
+  'Gedo' = 'Jubbaland',
+  'Banadir' = 'Banaadir',
+  'Mudug' = 'Galmudug',
+  'Bay' = 'South West',
+  'Lower Shabelle' = 'South West',
+  'Bari' = 'Puntland',
+  'Hiraan' = 'Hirshabeelle',
+  'Nugaal' = 'Puntland',
+  'Lower Juba' = 'Jubbaland',
+  'Galgaduud' = 'Galmudug',
+  'Sanaag' = 'Somaliland',
+  'Awdal' = 'Somaliland',
+  'Woqooyi Galbeed' = 'Somaliland',
+  'Togdheer' = 'Somaliland',
+  'Bakool' = 'South West',
+  'Sool' = 'Puntland',
+  'Middle Shabelle' = 'Hirshabeelle',
+  'Middle Juba' = 'Jubbaland'
+)
+
+
+# Add new state column to data frame based on mapping variable we created
+df$State <- sapply(df$Region, function(x) {
+  ifelse(x %in% names(mapping), mapping[[x]], 'Unknown')
+})
+
+
+```
+
+
+```{r}
+# view States column unique values
+unique(df$State)
+
+```
+
+```{r}
+# verify and view dataframe with the new added column
+df
+
+```
+now, after adding state column to our dataset, we can check the previous outlier solved or not?
+
+```{r}
+# check now the outlier is solved
+outlier_df <- df %>% 
+  group_by(State) %>% 
+  summarize(Total_population = sum(Total_population))
+
+# view outlier dataframe
+cat("Mean   = ", mean(outlier_df$Total_population), "\n")
+cat("Median = ", median(outlier_df$Total_population), "\n")
+cat("Max    = ", max(outlier_df$Total_population), "\n")
+cat("Min    = ", min(outlier_df$Total_population), "\n")
+```
+as shown above, in describe function, we see the stastics is much closer and accurate mean than previous statsistics.
+
+
+```{r}
+# Rearrange State column in the first position of the dataframe 
+df <- df[,c(ncol(df),1:(ncol(df)-1))]
+
+# view and verify
+df
+
+```
+
+
+
+
+
+
+```{r}
+# Install 'psych' package
+install.packages('psych')
+
+```
+
+```{r}
+# Load 'psych' package
+library(psych)
+
+# Generate descriptive statistics for data frame
+describe(df)
+```
+
+The output is showing the summary statistics of different variables in a dataset. The variables are presented in rows, while the statistics such as number of observations (n), mean, standard deviation (sd), median, trimmed mean, minimum value (min), maximum value (max), etc. are presented in columns. The variables included are State, Region, District, Total_population, IDPs, Non_displaced, IDPs_children, IDPs_men, IDPs_women, and IDPs_elderly.
+
+For example, for the variable "Total_population", there are 74 observations, with a mean of 212,691.59 and a standard deviation of 333,843.04. The minimum value is 42,436 and the maximum value is 2,683,312. Similarly, the other variables have their respective summary statistics presented in the table.
+
+
+
+
+## Data Visualization<br>
+
+### our hypothesis in this analyze<br>
+1.What is the total population distribution in Somalia?<br>
+2. How does the IDP population compare to the non-displaced population in Somalia?<br>
+3. What is the total population by state?<br>
+4. What is the total population by region?<br>
+5. What is the total population by district?<br>
+6. What is the IDP and non-displaced population like in states?<br>
+7. What is the distribution of non-displaced population like?<br>
+8. What is the distribution of IDPs like in states?<br>
+9. How is the population mapped in states?<br><br>
+
+
+
+```{r}
+# Install 'ggtext' package provides additional functionality for the ‘ggplot2’ package to allow for rich text formatting in plots.
+install.packages('ggtext')
+
+```
+
+
+
+```{r}
+# Install 'extrafont' package provides a way to use fonts other than the standard fonts in R graphics.
+install.packages('extrafont')
+```
+
+### 1.What is the total population distribution in Somalia?
+```{r}
+library(ggplot2) # load ggplot2 package
+library(extrafont) # load extrafont package
+
+
+# Aggregate the data by calculating the sum of each population category
+pop_sum <- colSums(df[, c("Total_children", "Total_men", "Total_women", "Total_elderly")])
+
+# Calculate the percentage of each category
+pop_pct <- pop_sum / sum(pop_sum) * 100
+
+# Create a dataframe with the population sums, categories, and percentages
+pop_df <- data.frame(population = pop_sum, category = names(pop_sum), percent = pop_pct)
+
+# Define a color palette for the pie chart
+my_colors <- c("#37306B", "#66347F", "#9E4784", "#D27685")
+
+# Create a pie chart using ggplot2
+ggplot(pop_df, aes(x="", y=population, fill=category)) +
+  geom_bar(stat="identity", width=1, color = "white") +
+  geom_text(aes(label = paste0(round(percent,1),"%")), position = position_stack(vjust = 0.5), color = "white", size = 4.5) +
+  coord_polar("y", start=0) +
+  scale_fill_manual(values = my_colors) +
+  labs(title = "Population Distribution in Somalia") +
+  theme_void() +
+  theme(legend.position="right") +
+  # Add 3D effect
+  annotate("rect", xmin=-1.2, xmax=-1, ymin=-0.6, ymax=0.6, alpha=0.5, fill="white", color="white") +
+  annotate("rect", xmin=1, xmax=1.2, ymin=-0.6, ymax=0.6, alpha=0.5, fill="white", color="white") +
+  annotate("rect", xmin=-1.2, xmax=1.2, ymin=-0.6, ymax=-0.4, alpha=0.5, fill="white", color="white") +
+  annotate("rect", xmin=-1.2, xmax=1.2, ymin=0.4, ymax=0.6, alpha=0.5, fill="white", color="white")
+
+
+
+
+```
+the above bie chart shows population distribution, children are 63 percent of the population while men and women are almost identically same with 16.5 percent.
+
+### 2. How does the IDP population compare to the non-displaced population in Somalia?
+
+```{r}
+# Load required packages
+library(dplyr)     # Data manipulation
+library(ggplot2)   # Graphics
+library(reshape2)  # Data reshaping
+library(scales)    # Plot scales
+
+# Aggregate the data by calculating the sum of each population category
+pop_sum <- colSums(df[, c("IDPs", "Non_displaced")])
+
+# Calculate the percentage of each category
+pop_pct <- pop_sum / sum(pop_sum) * 100
+
+# Create a dataframe with the population sums, categories, and percentages
+pop_df <- data.frame(population = pop_sum, category = names(pop_sum), percent = pop_pct)
+
+# Define a color palette for the bar chart
+my_colors <- c("#9E4784", "#D27685")
+
+# Create a bar chart using ggplot2
+ggplot(pop_df, aes(x=category, y=population, fill=category)) +
+  geom_bar(stat="identity", width=0.5) +
+  geom_text(aes(label = paste0(round(percent,1),"%")), position = position_stack(vjust = 0.5), color = "white", size = 5) +
+  geom_text(aes(label = format(population, big.mark = ",")), position = position_stack(vjust = 1.0), color = "black", size = 5) +
+  labs(title = "IDPs vs Non-displaced Population in Somalia", x="", y="Population") +
+  scale_fill_manual(values = my_colors) +
+  theme_classic() +
+  theme(legend.position="bottom") +
+  scale_y_continuous(labels = comma)
+
+
+```
+the above bar chart shows IDPs and non displaced population side by side. over 81 percent are non displaced population and 18 percent are IDPs.
+
+
+### 3. What is the total population by state?
+
+```{r}
+# Create a bar chart using ggplot2
+ggplot(df, aes(x= State, y=Total_population, fill=State)) +
+  geom_bar(stat="identity", width=0.5) +
+  labs(title = "Total Population by State in Somalia", x="State", y="Total Population") +
+  theme_classic() +
+  theme(legend.position="none") +
+  scale_y_continuous(labels = comma)
+```
+in this bar chart, shows states with total population. somaliland and southwest are leading with similar numbers, followed by banaadir and others.
+
+
+### 4. What is the total population by region?
+
+
+```{r}
+# create ggplot bar chart
+ggplot(df, aes(x= reorder(Region, +Total_population), y=Total_population, fill=Region)) +
+  geom_bar(stat="identity", width=0.5) +
+  #coord_flip() +
+  labs(title = "Total Population by Region in Somalia", x="Region", y="Total Population") +
+  theme_classic() +
+  theme(legend.position="none", axis.text.x = element_text(angle = 90, vjust = 0.5), plot.margin = unit(c(1,1,1,1), "cm")) +
+  scale_y_continuous(labels = comma)
+
+```
+in the above chart, you can see clearly banaadir is the outlier of this view. we solved with state column as shown previous above graph.
+
+
+
+### 5. What is the total population by district?
+
+
+
+```{r}
+# create ggplot bar chart
+ggplot(df, aes(x= reorder(District, +Total_population), y=Total_population, fill=District)) +
+  geom_bar(stat="identity", width=0.5) +
+  #coord_flip() +
+  labs(title = "Total Population by district in Somalia", x="District", y="Total Population") +
+  theme_classic() +
+  theme(legend.position="none", axis.text.x = element_text(angle = 90, vjust = 0.5), plot.margin = unit(c(0.1,0.1,0.1,0.1), "cm")) +
+  scale_y_continuous(labels = comma)
+```
+in this chart, shows districts and population with banaadir outlier. since banaadir is not listed its districts it is clear that has much population according to other small districts in the country.
+
+
+
+### 6. What is the IDP and non-displaced population like in states?
+
+
+```{r}
+# Load required packages
+library(dplyr)     # Data manipulation
+library(ggplot2)   # Graphics
+library(reshape2)  # Data reshaping
+library(scales)    # Plot scales
+
+# Aggregate the data by state and population category
+pop_agg <- df %>% group_by(State) %>% summarise(IDPs = sum(IDPs), Non_displaced = sum(Non_displaced), Total_population = sum(Total_population))
+
+# Manually reorder the states by total population
+pop_agg$State <- factor(pop_agg$State, levels = pop_agg$State[order(pop_agg$Total_population, decreasing = TRUE)])
+
+# Select only IDPs and Non_displaced columns
+pop_melt <- pop_agg %>% select(State, IDPs, Non_displaced) %>% melt(id.vars = "State")
+
+# Define a color palette for the stacked bar chart
+my_colors <- c("#37306B", "#D27685", "#66347F", "#9E4784")
+
+# Create a stacked bar chart using ggplot2
+ggplot(pop_melt, aes(x=State, y=value, fill=variable)) +
+  geom_bar(stat="identity", width=0.5) +
+  geom_text(aes(label = format(value, big.mark = ","), color = variable),
+            position = position_stack(vjust = 0.5), size = 3) +
+  labs(title = "IDPs vs Non-displaced Population by State in Somalia", x="", y="Population") +
+  scale_fill_manual(values = my_colors, name="Population category", labels=c("IDPs", "Non-displaced")) +
+  scale_color_manual(values = c("#D27685", "#37306B"), name="Population category", labels=c("IDPs", "Non-displaced")) +
+  theme_classic() +
+  theme(legend.position="bottom") +
+  scale_y_continuous(labels = comma)
+
+
+```
+in the above chart, it shows IDPs and non displaced population for every state. the most IDPs live in banaadir. the most non displaced people live in somaliland.
+
+
+
+### 7. What is the distribution of non-displaced population like?
+
+
+```{r}
+# Load necessary packages
+library(dplyr)    # For working with data frames
+library(ggplot2)  # For creating graphics
+library(reshape2) # For transforming data
+
+# Aggregate the data by state and population category
+pop_agg <- df %>% group_by(State) %>% 
+  summarise(Non_disp_children = sum(Non_disp_children),
+            Non_disp_men = sum(Non_disp_men),
+            Non_disp_women = sum(Non_disp_women),
+            Non_disp_elderly = sum(Non_disp_elderly))
+
+# Melt the data to long format
+pop_melt <- pop_agg %>% select(State, Non_disp_children, Non_disp_men, Non_disp_women, Non_disp_elderly) %>% 
+  melt(id.vars = "State")
+
+# Define a color palette for the stacked bar chart
+my_colors <- c("#F0EBCE", "#AA8B56", "#4E6C50", "#DF7861")
+
+# Manually reorder the states by total Non-displaced population
+pop_melt$State <- reorder(pop_melt$State, -pop_melt$value)
+
+# Create a stacked bar chart using ggplot2
+ggplot(pop_melt, aes(x = State, y = value, fill = variable)) +
+  geom_bar(stat = "identity", width = 0.5) +
+  labs(title = "Non-displaced Population by State in Somalia", x = "", y = "Population") +
+  scale_fill_manual(values = my_colors, name = "Population category", 
+                    labels = c("Children", "Men", "Women", "Elderly")) +
+  theme_classic() +
+  theme(legend.position = "bottom") +
+  scale_y_continuous(labels = comma)
+
+
+
+```
+In the above chart, shows non displaced population distribution in states. most children and most men live in somaliland while most elderly live in south west.
+
+
+
+### 8. What is the distribution of IDPs like in states?
+
+
+```{r}
+# Load necessary packages
+library(dplyr)    # For working with data frames
+library(ggplot2)  # For creating graphics
+library(reshape2) # For transforming data
+
+# Aggregate the data by state and population category
+pop_agg <- df %>% group_by(State) %>% 
+  summarise(IDPs_children = sum(IDPs_children),
+            IDPs_men = sum(IDPs_men),
+            IDPs_women = sum(IDPs_women),
+            IDPs_elderly = sum(IDPs_elderly),
+            Total_IDPs = sum(IDPs_children + IDPs_men + IDPs_women + IDPs_elderly))
+
+# Reorder the states by total IDPs population
+pop_agg$State <- reorder(pop_agg$State, pop_agg$Total_IDPs, FUN = function(x) -x)
+
+# Melt the data to long format
+pop_melt <- pop_agg %>% select(State, starts_with("IDPs_")) %>% 
+  melt(id.vars = "State", variable.name = "Population_category", value.name = "Population")
+
+# Define a color palette for the stacked bar chart
+my_colors <- c("#CFF5E7", "#47B5FF", "#256D85", "#06283D")
+
+# Create a stacked bar chart using ggplot2
+ggplot(pop_melt, aes(x=State, y=Population, fill=Population_category)) +
+  geom_bar(stat="identity", width=0.5) +
+  labs(title = "IDPs and their disaggregation by State in Somalia", x="", y="Population") +
+  scale_fill_manual(values = my_colors, name="Population category", 
+                    labels=c("IDPs Children", "IDPs Men", "IDPs Women", "IDPs Elderly")) +
+  theme_classic() +
+  theme(legend.position="bottom") +
+  scale_y_continuous(labels = comma)
+
+```
+in the above chart, IDPs disagregation by states, banaadir are leading every part of disaggregation whether its child, men, women, or elderly. followed by southwest and somaliland.
+
+
+
+```{r}
+# Install necessary packages
+install.packages('maps')    # For creating maps
+install.packages('mapdata') # For providing map data
+install.packages('sf')      # For working with spatial data
+
+```
+
+
+
+
+
+
+```{r}
+install.packages('mapproj') # a package For map projections
+
+```
+```{r}
+# Load necessary packages
+library(tidyverse) # For data manipulation and visualization
+library(magrittr)  # For piping functions
+library(ggplot2)   # For creating graphics
+library(maps)      # For creating maps
+library(mapproj)   # For map projections
+
+```
+
+```{r}
+# Let’s take a look at the world map provided within the maps library.
+World <- map_data("world")
+ggplot() +
+  geom_polygon(data = World, aes(x=long, y = lat, group = group), fill="deepskyblue", alpha=0.7)
+
+```
+
+```{r}
+# We will filter the library for the one country to use in our case Somalia.
+Somalia <- map_data("world") %>% filter(region=="Somalia")
+  ggplot() +
+  geom_polygon(data = Somalia, aes(x=long, y = lat, group = group), fill="deepskyblue", alpha=0.7)
+
+```
+
+
+
+```{r}
+# It’s time to improve some visuals before we can actually start plotting. I am going to make the map as clean as possible — we do not need the coordinates or the grey background for our purpose.
+ggplot() +
+  geom_polygon(data = Somalia, aes(x=long, y = lat, group = group), fill="deepskyblue", alpha=0.7) +
+   theme_minimal() + 
+  theme(legend.position = 'none', panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.text = element_blank(), axis.title = element_blank())
+
+```
+
+
+
+
+
+
+
+```{r}
+# we will fetch State and Total_population columns in our original dataset to apply map graphics
+# Group by sum using dplyr
+# returns tibble table
+df_grouped <- df %>% group_by(State) %>% 
+  summarise(Population=sum(Total_population),
+            .groups = 'drop')
+
+```
+
+
+```{r}
+# view sliced dataframe
+df_grouped
+
+```
+```{r}
+# delete dataframe1, dataframe2
+#rm("df2", "df_lat_long", "lat_long")
+ 
+# display
+#ls()
+
+```
+
+```{r}
+# Convert tibble to df and rename to remember well what dataframe is about
+df_lat_long <- df_grouped %>% as.data.frame()
+df_lat_long
+
+```
+
+
+
+
+```{r}
+# Load necessary packages
+library(tibble) # For working with data frames
+
+# create lat and long vectors to add our dataframe
+df2 <- tibble(
+  lat = c(2.1187, 6.0404, 4.7360, 1.257377, 9.7866, 9.4117, 2.609846),
+  long = c(45.3369, 47.7638, 45.2040, 42.008912, 49.3653, 46.8253, 43.630437)
+)
+
+# Convert tibble to df
+df2 <- df2 %>% as.data.frame()
+df2
+
+```
+
+```{r}
+# add two dataframes together 
+df_lat_long <- cbind(df_lat_long, df2)
+df_lat_long
+
+```
+
+
+
+### 9. How is the population mapped in states?
+
+
+```{r}
+# Time to add our cities to the clean map using their coordinates and geom_point() function
+ggplot() +
+  geom_polygon(data = Somalia, aes(x=long, y = lat, group = group), fill="deepskyblue", alpha=0.7) +
+    geom_point( data=df_lat_long, aes(x=long, y=lat, size=Population,),  color="mediumblue",  alpha=0.5) +
+    scale_size_continuous(range=c(10, 22)) +
+   theme_minimal() +
+   theme(legend.position = 'none', panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.text = element_blank(), axis.title = element_blank())
+
+```
+
+
+```{r}
+# next step will be adding labels. I want each label to include the name of the city and the population with a comma separator.
+ggplot() +
+  geom_polygon(data =Somalia, aes(x=long, y = lat, group = group), fill="deepskyblue", alpha=0.7) +
+    geom_point( data=df_lat_long, aes(x=long, y=lat, size=Population,),  color="mediumblue",  alpha=0.45) +
+    scale_size_continuous(range=c(15, 25)) +
+     geom_text(data = df_lat_long, label=paste0(df_lat_long$State, ":", as.character(format(df_lat_long$Population, big.mark=","))), aes(x=long, y=lat), hjust=0.5, vjust=-2.7, fontface='bold', size=3) +
+   theme_minimal() +
+   theme(legend.position = 'none', panel.grid.major = element_blank(), panel.grid.minor = element_blank(), axis.text = element_blank(), axis.title = element_blank())
+
+```
+the above graph shows, where states are located in the country and total population live in. we can say that southern erea population are more than the northen population.
+
+
+
+
+
+
+
+
+
+
